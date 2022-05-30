@@ -21,6 +21,11 @@ func main() {
 	wg.Wait()
 }
 
+var packetPool sync.Pool = sync.Pool{New: func() interface{} {
+		return &packet.PacPayload{}
+	},
+}
+
 func startClient(connName string)  {
 	done := make(chan struct{})
 	quit := make(chan struct{})
@@ -57,7 +62,7 @@ func startClient(connName string)  {
 				panic(err)
 			}
 
-			p := &packet.PacPayload{}
+			p := packetPool.Get().(*packet.PacPayload)
 			err = p.Decode(fPayload)
 
 			if err != nil {
@@ -66,6 +71,7 @@ func startClient(connName string)  {
 			}
 			counter ++
 			fmt.Printf("%s receive from server msg=%s counter=%d\n", connName, p.Payload, counter)
+			packetPool.Put(p)
 		}
 
 	}()

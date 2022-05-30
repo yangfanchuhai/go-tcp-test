@@ -5,6 +5,7 @@ import (
 	"github.com/yangfanchuhai/go-tcp-test/frame"
 	"github.com/yangfanchuhai/go-tcp-test/packet"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -53,8 +54,13 @@ func processConn(conn net.Conn)  {
 	}
 }
 
+var packetPool = sync.Pool{New: func() interface{} {
+		return packet.PacPayload{}
+	},
+}
+
 func processPacket(conn net.Conn, codec frame.StreamFrameCodec, f frame.FPayload) (string, error)  {
-	p := packet.PacPayload{}
+	p := packetPool.Get().(packet.PacPayload)
 	err := p.Decode(f)
 	if err != nil {
 		fmt.Println("decode packet failed", err)
@@ -64,9 +70,13 @@ func processPacket(conn net.Conn, codec frame.StreamFrameCodec, f frame.FPayload
 	var connName = p.Payload[0:5]
 	switch p.CommType {
 	case packet.CommConn:
-		p = packet.PacPayload{CommType: packet.CommConnAck, Payload: fmt.Sprintf("ok")}
+		p.CommType = packet.CommConnAck
+		p.Payload = fmt.Sprintf("ok")
+		//p = packet.PacPayload{CommType: packet.CommConnAck, Payload: fmt.Sprintf("ok")}
 	case packet.CommSubmit:
-		p = packet.PacPayload{CommType: packet.CommSubmitAck, Payload: fmt.Sprintf("return%s", p.Payload)}
+		p.CommType = packet.CommSubmitAck
+		p.Payload = fmt.Sprintf("return%s", p.Payload)
+		//p = packet.PacPayload{CommType: packet.CommSubmitAck, Payload: fmt.Sprintf("return%s", p.Payload)}
 	}
 
 	b, err := p.Encode()
@@ -81,5 +91,6 @@ func processPacket(conn net.Conn, codec frame.StreamFrameCodec, f frame.FPayload
 		return "", err
 	}
 	fmt.Printf("send reply to client success %s\n", p.Payload)
+	packetPool.Put(p)
 	return connName, nil
 }
